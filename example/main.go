@@ -14,7 +14,7 @@ func main() {
 	ctx := context.Background()
 
 	cm, err := einoacp.NewChatModel(ctx, &einoacp.Config{
-		Command: einoacp.ClaudeCommand(),
+		Command:     einoacp.ClaudeCommand(),
 		AutoApprove: false,
 	})
 	if err != nil {
