@@ -1,3 +1,4 @@
+// Example demonstrates how to use the ACP chat model with Eino.
 package main
 
 import (

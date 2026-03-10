@@ -1,3 +1,4 @@
+// Package einoacp provides an ACP-backed chat model implementation for Eino.
 package einoacp
 
 import (
