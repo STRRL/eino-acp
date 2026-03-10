@@ -16,7 +16,7 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 )
 
-var _ model.ChatModel = (*ChatModel)(nil)
+var _ model.ToolCallingChatModel = (*ChatModel)(nil)
 
 // Config for the ACP-based chat model.
 type Config struct {
@@ -76,10 +76,12 @@ func NewChatModel(_ context.Context, config *Config) (*ChatModel, error) {
 	}, nil
 }
 
+// GetType returns the component type name used by Eino callbacks.
 func (cm *ChatModel) GetType() string {
 	return "ChatModel/ACP"
 }
 
+// IsCallbacksEnabled reports whether callback hooks are enabled for this model.
 func (cm *ChatModel) IsCallbacksEnabled() bool {
 	return true
 }
@@ -89,7 +91,13 @@ func (cm *ChatModel) BindTools(_ []*schema.ToolInfo) error {
 	return nil
 }
 
-func (cm *ChatModel) Generate(ctx context.Context, input []*schema.Message, opts ...model.Option) (outMsg *schema.Message, err error) {
+// WithTools is a no-op; ACP agents manage their own tools.
+func (cm *ChatModel) WithTools(_ []*schema.ToolInfo) (model.ToolCallingChatModel, error) {
+	return cm, nil
+}
+
+// Generate runs the ACP agent and returns the full assistant message.
+func (cm *ChatModel) Generate(ctx context.Context, input []*schema.Message, _ ...model.Option) (outMsg *schema.Message, err error) {
 	ctx = callbacks.EnsureRunInfo(ctx, cm.GetType(), components.ComponentOfChatModel)
 	ctx = callbacks.OnStart(ctx, cm.getCallbackInput(input))
 	defer func() {
@@ -122,7 +130,8 @@ func (cm *ChatModel) Generate(ctx context.Context, input []*schema.Message, opts
 	return outMsg, nil
 }
 
-func (cm *ChatModel) Stream(ctx context.Context, input []*schema.Message, opts ...model.Option) (outStream *schema.StreamReader[*schema.Message], err error) {
+// Stream runs the ACP agent and yields assistant output chunks as they arrive.
+func (cm *ChatModel) Stream(ctx context.Context, input []*schema.Message, _ ...model.Option) (outStream *schema.StreamReader[*schema.Message], err error) {
 	ctx = callbacks.EnsureRunInfo(ctx, cm.GetType(), components.ComponentOfChatModel)
 	ctx = callbacks.OnStart(ctx, cm.getCallbackInput(input))
 	defer func() {
