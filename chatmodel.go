@@ -20,13 +20,14 @@ var _ model.ChatModel = (*ChatModel)(nil)
 
 // Config for the ACP-based chat model.
 type Config struct {
-	// Binary is the path to the agent CLI binary (e.g. "claude", "codex", "gemini").
-	// Required.
-	Binary string
-
-	// Args are additional arguments passed when launching the agent subprocess.
-	// For example: ["--model", "opus"] for Claude CLI.
-	Args []string
+	// Command is the full command to launch the ACP agent.
+	// The first element is the binary, the rest are arguments.
+	// Examples:
+	//   Claude Code: []string{"npx", "-y", "@zed-industries/claude-agent-acp@latest"}
+	//   Codex CLI:   []string{"codex", "--acp"}
+	//   Gemini CLI:  []string{"gemini", "--experimental-acp"}
+	// Required, must have at least one element.
+	Command []string
 
 	// Cwd is the working directory for the agent session.
 	// Defaults to the current working directory.
@@ -45,8 +46,7 @@ type Config struct {
 // any ACP-compatible coding agent (Claude Code, Codex CLI, Gemini CLI, etc.)
 // over the Agent Client Protocol.
 type ChatModel struct {
-	binary      string
-	args        []string
+	command     []string
 	cwd         string
 	env         []string
 	autoApprove bool
@@ -54,12 +54,12 @@ type ChatModel struct {
 
 // NewChatModel creates a new ACP chat model.
 func NewChatModel(_ context.Context, config *Config) (*ChatModel, error) {
-	if config.Binary == "" {
-		return nil, fmt.Errorf("binary is required")
+	if len(config.Command) == 0 {
+		return nil, fmt.Errorf("command is required")
 	}
 
-	if _, err := exec.LookPath(config.Binary); err != nil {
-		return nil, fmt.Errorf("agent binary %q not found: %w", config.Binary, err)
+	if _, err := exec.LookPath(config.Command[0]); err != nil {
+		return nil, fmt.Errorf("binary %q not found: %w", config.Command[0], err)
 	}
 
 	cwd := config.Cwd
@@ -72,8 +72,7 @@ func NewChatModel(_ context.Context, config *Config) (*ChatModel, error) {
 	}
 
 	return &ChatModel{
-		binary:      config.Binary,
-		args:        config.Args,
+		command:     config.Command,
 		cwd:         cwd,
 		env:         config.Env,
 		autoApprove: config.AutoApprove,
@@ -174,7 +173,7 @@ func (cm *ChatModel) Stream(ctx context.Context, input []*schema.Message, opts .
 // runPrompt launches the agent subprocess, runs the ACP protocol flow,
 // and calls onUpdate for each session update received.
 func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onUpdate func(acp.SessionUpdate)) error {
-	cmd := exec.CommandContext(ctx, cm.binary, cm.args...)
+	cmd := exec.CommandContext(ctx, cm.command[0], cm.command[1:]...)
 	cmd.Env = cm.buildEnv()
 	cmd.Stderr = os.Stderr
 
@@ -189,7 +188,7 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 	}
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start agent %q: %w", cm.binary, err)
+		return fmt.Errorf("start agent: %w", err)
 	}
 
 	defer func() {
@@ -243,7 +242,6 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 
 func (cm *ChatModel) buildEnv() []string {
 	env := os.Environ()
-	// Remove CLAUDECODE to avoid nested session detection
 	filtered := make([]string, 0, len(env)+len(cm.env))
 	for _, e := range env {
 		if !strings.HasPrefix(e, "CLAUDECODE=") {

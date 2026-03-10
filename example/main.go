@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	einoacp "github.com/strrl/eino-acp"
 )
@@ -11,14 +13,8 @@ import (
 func main() {
 	ctx := context.Background()
 
-	// Use any ACP-compatible agent: "claude", "codex", "gemini"
-	binary := "claude"
-	if len(os.Args) > 1 {
-		binary = os.Args[1]
-	}
-
 	cm, err := einoacp.NewChatModel(ctx, &einoacp.Config{
-		Binary:      binary,
+		Command:     []string{"npx", "-y", "@zed-industries/claude-agent-acp@latest"},
 		AutoApprove: false,
 	})
 	if err != nil {
@@ -26,20 +22,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	// --- Generate (non-streaming) ---
-	fmt.Println("=== Generate ===")
-	msg, err := cm.Generate(ctx, einoacp.UserMessages("Say hello in one sentence."))
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("> ")
+	input, err := reader.ReadString('\n')
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "generate error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "read error: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println(msg.Content)
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return
+	}
 
-	// --- Stream ---
-	fmt.Println("\n=== Stream ===")
-	stream, err := cm.Stream(ctx, einoacp.UserMessages("Tell me a short joke."))
+	stream, err := cm.Stream(ctx, einoacp.UserMessages(input))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "stream error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 	defer stream.Close()
