@@ -4,6 +4,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -12,10 +13,24 @@ import (
 )
 
 func main() {
+	provider := flag.String("provider", "claude", "ACP provider to use: claude, codex")
+	flag.Parse()
+
+	var command []string
+	switch *provider {
+	case "claude":
+		command = einoacp.ClaudeCommand()
+	case "codex":
+		command = einoacp.CodexCommand()
+	default:
+		fmt.Fprintf(os.Stderr, "unknown provider: %s (supported: claude, codex)\n", *provider)
+		os.Exit(1)
+	}
+
 	ctx := context.Background()
 
 	cm, err := einoacp.NewChatModel(ctx, &einoacp.Config{
-		Command:     einoacp.ClaudeCommand(),
+		Command:     command,
 		AutoApprove: false,
 	})
 	if err != nil {

@@ -22,7 +22,7 @@ var _ model.ToolCallingChatModel = (*ChatModel)(nil)
 type Config struct {
 	// Command is the full command to launch the ACP agent.
 	// The first element is the binary, the rest are arguments.
-	// Use the provided helpers: ClaudeCommand(), CodexCommand(), GeminiCommand().
+	// Use the provided helpers: ClaudeCommand(), CodexCommand().
 	// Required, must have at least one element.
 	Command []string
 
@@ -40,7 +40,7 @@ type Config struct {
 }
 
 // ChatModel implements eino's model.ChatModel by communicating with
-// any ACP-compatible coding agent (Claude Code, Codex CLI, Gemini CLI, etc.)
+// any ACP-compatible coding agent (Claude Code, Codex CLI, etc.)
 // over the Agent Client Protocol.
 type ChatModel struct {
 	command     []string
