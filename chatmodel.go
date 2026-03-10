@@ -22,10 +22,7 @@ var _ model.ChatModel = (*ChatModel)(nil)
 type Config struct {
 	// Command is the full command to launch the ACP agent.
 	// The first element is the binary, the rest are arguments.
-	// Examples:
-	//   Claude Code: []string{"npx", "-y", "@zed-industries/claude-agent-acp@latest"}
-	//   Codex CLI:   []string{"codex", "--acp"}
-	//   Gemini CLI:  []string{"gemini", "--experimental-acp"}
+	// Use the provided helpers: ClaudeCommand(), CodexCommand(), GeminiCommand().
 	// Required, must have at least one element.
 	Command []string
 
