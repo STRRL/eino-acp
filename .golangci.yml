@@ -11,4 +11,4 @@ linters:
     - revive
   exclusions:
     paths:
-      - vendor
+      - vendor/
