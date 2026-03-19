@@ -74,6 +74,23 @@ func main() {
 2. Communicates via [ACP](https://agentclientprotocol.com/) (JSON-RPC 2.0 over stdio)
 3. Maps ACP session updates to Eino's `schema.Message` streaming interface
 
+## Tool Call Mapping
+
+`eino-acp` translates ACP `tool_call` and `tool_call_update` session updates into Eino assistant `ToolCalls`.
+
+| ACP field | Eino field | Notes |
+|-------|-------------|-------|
+| `toolCallId` | `ToolCall.ID` | Preserved as-is. |
+| `kind` | `ToolCall.Function.Name` | Uses ACP tool kind such as `read`, `edit`, or `execute`. Falls back to `other` when ACP omits the kind. |
+| `rawInput` | `ToolCall.Function.Arguments` | JSON-marshaled into a stable string. Defaults to `{}` when missing. |
+| `title`, `status`, `rawOutput`, `locations`, `content`, `_meta` | `ToolCall.Extra` | Preserved under `acp_*` keys so observability consumers can inspect ACP-specific metadata. |
+
+For `Generate`, the final assistant message includes the accumulated `ToolCalls`.
+
+For `Stream`, each ACP tool event is emitted as an assistant chunk with empty `Content` and a single `ToolCall`, so consumers such as tape, Langfuse-style handlers, or ADK can observe tool activity as it happens.
+
+`agent_thought_chunk`, `plan`, and other non-message ACP session updates are still ignored.
+
 Built on [coder/acp-go-sdk](https://github.com/coder/acp-go-sdk).
 
 ## License

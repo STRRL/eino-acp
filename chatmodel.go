@@ -107,24 +107,20 @@ func (cm *ChatModel) Generate(ctx context.Context, input []*schema.Message, _ ..
 	}()
 
 	var mu sync.Mutex
-	var textParts []string
+	collector := newResponseCollector()
 
 	onUpdate := func(u acp.SessionUpdate) {
-		if u.AgentMessageChunk != nil && u.AgentMessageChunk.Content.Text != nil {
-			mu.Lock()
-			textParts = append(textParts, u.AgentMessageChunk.Content.Text.Text)
-			mu.Unlock()
-		}
+		mu.Lock()
+		defer mu.Unlock()
+
+		collector.handleUpdate(u)
 	}
 
 	if err = cm.runPrompt(ctx, input, onUpdate); err != nil {
 		return nil, err
 	}
 
-	outMsg = &schema.Message{
-		Role:    schema.Assistant,
-		Content: strings.Join(textParts, ""),
-	}
+	outMsg = collector.finalMessage()
 
 	callbacks.OnEnd(ctx, cm.getCallbackOutput(outMsg))
 	return outMsg, nil
@@ -141,14 +137,19 @@ func (cm *ChatModel) Stream(ctx context.Context, input []*schema.Message, _ ...m
 	}()
 
 	sr, sw := schema.Pipe[*model.CallbackOutput](1)
+	var mu sync.Mutex
+	collector := newResponseCollector()
 
 	onUpdate := func(u acp.SessionUpdate) {
-		if u.AgentMessageChunk != nil && u.AgentMessageChunk.Content.Text != nil {
-			msg := &schema.Message{
-				Role:    schema.Assistant,
-				Content: u.AgentMessageChunk.Content.Text.Text,
-			}
-			_ = sw.Send(&model.CallbackOutput{Message: msg}, nil)
+		mu.Lock()
+		defer mu.Unlock()
+
+		textChunk, toolChunk := collector.handleUpdate(u)
+		if textChunk != nil {
+			_ = sw.Send(&model.CallbackOutput{Message: textChunk}, nil)
+		}
+		if toolChunk != nil {
+			_ = sw.Send(&model.CallbackOutput{Message: toolChunk}, nil)
 		}
 	}
 
