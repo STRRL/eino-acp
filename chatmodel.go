@@ -12,6 +12,7 @@ import (
 	"github.com/cloudwego/eino/callbacks"
 	"github.com/cloudwego/eino/components"
 	"github.com/cloudwego/eino/components/model"
+	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/schema"
 	acp "github.com/coder/acp-go-sdk"
 )
@@ -109,9 +110,59 @@ func (cm *ChatModel) Generate(ctx context.Context, input []*schema.Message, _ ..
 	var mu sync.Mutex
 	collector := newResponseCollector()
 
+	// Track per-tool callback contexts for firing OnStart/OnEnd
+	toolCtxMap := make(map[string]context.Context)
+
 	onUpdate := func(u acp.SessionUpdate) {
 		mu.Lock()
 		defer mu.Unlock()
+
+		// Fire tool OnStart callback when a new tool call arrives
+		if u.ToolCall != nil {
+			toolID := string(u.ToolCall.ToolCallId)
+			toolName := string(u.ToolCall.Kind)
+			if toolName == "" {
+				toolName = u.ToolCall.Title
+			}
+			toolCtx := callbacks.ReuseHandlers(ctx, &callbacks.RunInfo{
+				Name:      toolName,
+				Type:      "Tool/ACP",
+				Component: components.ComponentOfTool,
+			})
+			toolCtx = callbacks.OnStart(toolCtx, &tool.CallbackInput{
+				ArgumentsInJSON: marshalACPValue(u.ToolCall.RawInput, "{}"),
+				Extra: map[string]any{
+					"acp_title":        u.ToolCall.Title,
+					"acp_kind":         string(u.ToolCall.Kind),
+					"acp_tool_call_id": toolID,
+				},
+			})
+			toolCtxMap[toolID] = toolCtx
+		}
+
+		// Fire tool OnEnd callback when a tool call completes or fails
+		if u.ToolCallUpdate != nil {
+			toolID := string(u.ToolCallUpdate.ToolCallId)
+			if tCtx, ok := toolCtxMap[toolID]; ok {
+				status := acp.ToolCallStatusCompleted
+				if u.ToolCallUpdate.Status != nil {
+					status = *u.ToolCallUpdate.Status
+				}
+				switch status {
+				case acp.ToolCallStatusCompleted:
+					callbacks.OnEnd(tCtx, &tool.CallbackOutput{
+						Response: marshalACPValue(u.ToolCallUpdate.RawOutput, ""),
+						Extra: map[string]any{
+							"acp_tool_call_id": toolID,
+						},
+					})
+					delete(toolCtxMap, toolID)
+				case acp.ToolCallStatusFailed:
+					callbacks.OnError(tCtx, fmt.Errorf("tool %s failed", toolID))
+					delete(toolCtxMap, toolID)
+				}
+			}
+		}
 
 		collector.handleUpdate(u)
 	}
@@ -139,10 +190,54 @@ func (cm *ChatModel) Stream(ctx context.Context, input []*schema.Message, _ ...m
 	sr, sw := schema.Pipe[*model.CallbackOutput](1)
 	var mu sync.Mutex
 	collector := newResponseCollector()
+	toolCtxMap := make(map[string]context.Context)
 
 	onUpdate := func(u acp.SessionUpdate) {
 		mu.Lock()
 		defer mu.Unlock()
+
+		// Fire tool OnStart/OnEnd callbacks (same logic as Generate)
+		if u.ToolCall != nil {
+			toolID := string(u.ToolCall.ToolCallId)
+			toolName := string(u.ToolCall.Kind)
+			if toolName == "" {
+				toolName = u.ToolCall.Title
+			}
+			toolCtx := callbacks.ReuseHandlers(ctx, &callbacks.RunInfo{
+				Name:      toolName,
+				Type:      "Tool/ACP",
+				Component: components.ComponentOfTool,
+			})
+			toolCtx = callbacks.OnStart(toolCtx, &tool.CallbackInput{
+				ArgumentsInJSON: marshalACPValue(u.ToolCall.RawInput, "{}"),
+				Extra: map[string]any{
+					"acp_title":        u.ToolCall.Title,
+					"acp_kind":         string(u.ToolCall.Kind),
+					"acp_tool_call_id": toolID,
+				},
+			})
+			toolCtxMap[toolID] = toolCtx
+		}
+		if u.ToolCallUpdate != nil {
+			toolID := string(u.ToolCallUpdate.ToolCallId)
+			if tCtx, ok := toolCtxMap[toolID]; ok {
+				status := acp.ToolCallStatusCompleted
+				if u.ToolCallUpdate.Status != nil {
+					status = *u.ToolCallUpdate.Status
+				}
+				switch status {
+				case acp.ToolCallStatusCompleted:
+					callbacks.OnEnd(tCtx, &tool.CallbackOutput{
+						Response: marshalACPValue(u.ToolCallUpdate.RawOutput, ""),
+						Extra:    map[string]any{"acp_tool_call_id": toolID},
+					})
+					delete(toolCtxMap, toolID)
+				case acp.ToolCallStatusFailed:
+					callbacks.OnError(tCtx, fmt.Errorf("tool %s failed", toolID))
+					delete(toolCtxMap, toolID)
+				}
+			}
+		}
 
 		textChunk, toolChunk := collector.handleUpdate(u)
 		if textChunk != nil {
