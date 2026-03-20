@@ -3,8 +3,11 @@ package einoacp
 import "os/exec"
 
 // dlxPrefix returns the preferred package runner command.
-// It prefers "pnpm dlx" over "npx -y" for faster cold-start performance.
+// Order: bunx, then pnpm dlx, then npx -y.
 func dlxPrefix() []string {
+	if _, err := exec.LookPath("bunx"); err == nil {
+		return []string{"bunx"}
+	}
 	if _, err := exec.LookPath("pnpm"); err == nil {
 		return []string{"pnpm", "dlx"}
 	}
