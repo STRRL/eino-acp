@@ -5,15 +5,21 @@ This document describes how ACP (Agent Client Protocol) concepts map to Eino's m
 ## Protocol Flow Mapping
 
 ```
-ACP                                     Eino
-─────────────────────                   ─────────────────────
+ACP (streaming-only)                    Eino (Generate or Stream)
+────────────────────                    ────────────────────────
 Initialize + NewSession                 (setup, no eino equivalent)
     ↓
-Prompt(ContentBlock[])        →         ChatModel.Generate([]*schema.Message)
-    ↓                                       ↓
-SessionUpdate stream          →         callbacks.OnStart/OnEnd + StreamReader
+Prompt(ContentBlock[])        →         ChatModel.Generate() or Stream()
     ↓
-PromptResponse(StopReason)    →         return *schema.Message / error
+SessionUpdate notifications   →         Generate: accumulate internally
+  AgentMessageChunk                     Stream:   push chunk to StreamReader
+  ToolCall / ToolCallUpdate             Both:     fire tool callbacks in real-time
+  AgentThoughtChunk                     (dropped)
+  Plan                                  (dropped)
+    ↓
+PromptResponse(StopReason)    →         Generate: return aggregated *schema.Message
+                                        Stream:   close StreamReader
+                                        (StopReason itself is currently discarded)
 ```
 
 ## Data Type Mapping
@@ -128,7 +134,9 @@ Message[system] + Message[user] + Message[assistant] + Message[tool] → single 
 
 ## Streaming (Stream vs Generate)
 
-Both `Generate()` and `Stream()` use the same underlying ACP flow (`runPrompt` → `onUpdate` callback). The difference is how results are delivered to eino callers.
+ACP itself has no Generate/Stream distinction. There is only `session/prompt`, and the agent pushes `SessionUpdate` notifications incrementally — ACP is **streaming-only by design**.
+
+The Generate vs Stream split is an eino-acp adapter concern: both call the same `runPrompt()` underneath, but differ in how the `SessionUpdate` stream is surfaced to eino callers.
 
 ### Generate (synchronous)
 
