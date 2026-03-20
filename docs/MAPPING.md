@@ -126,6 +126,66 @@ Message[system] + Message[user] + Message[assistant] + Message[tool] → single 
 - **Lossy**: multi-turn structure destroyed (all concatenated with `\n\n`)
 - **Lossy**: tool call IDs and tool result associations lost
 
+## Streaming (Stream vs Generate)
+
+Both `Generate()` and `Stream()` use the same underlying ACP flow (`runPrompt` → `onUpdate` callback). The difference is how results are delivered to eino callers.
+
+### Generate (synchronous)
+
+```
+ACP onUpdate loop                       Eino
+──────────────────                      ────
+AgentMessageChunk(text)  →  accumulate in responseCollector.textParts
+ToolCall                 →  track in toolCallTracker + fire tool OnStart callback
+ToolCallUpdate           →  merge into tracker + fire tool OnEnd callback
+  ... (loop until PromptResponse) ...
+                         →  responseCollector.finalMessage() → callbacks.OnEnd → return Message
+```
+
+All events collected internally; caller gets one final `*schema.Message`.
+
+### Stream (async chunks)
+
+```
+ACP onUpdate loop                       Eino StreamReader[*schema.Message]
+──────────────────                      ──────────────────────────────────
+AgentMessageChunk(text)  →  sw.Send(Message{Content: chunk})     ← text chunk emitted immediately
+ToolCall(id=A, start)    →  sw.Send(Message{ToolCalls: [{A}]})   ← tool start emitted as message
+                            + fire tool OnStart callback
+ToolCallUpdate(id=A)     →  sw.Send(Message{ToolCalls: [{A}]})   ← tool update emitted as message
+                            + fire tool OnEnd/OnError callback
+  ... (loop) ...
+runPrompt returns        →  sw.Close()                            ← stream ends
+```
+
+Key differences from Generate:
+- Each text chunk is sent immediately via `sw.Send()` as a separate `schema.Message`
+- Each tool event (start/update) is also sent as a separate message with one `ToolCall`
+- The stream uses `schema.Pipe[*model.CallbackOutput]` with buffer size 1
+- `callbacks.OnEndWithStreamOutput` wraps the stream so eino's callback system can observe chunks
+- The final conversion strips `model.CallbackOutput` wrapper → `*schema.Message` via `StreamReaderWithConvert`
+- **No final aggregated message**: unlike Generate, Stream does not call `finalMessage()`. The consumer must concatenate chunks themselves using `schema.ConcatMessages()` if needed.
+
+### Callback timing comparison
+
+| Event | Generate | Stream |
+|-------|----------|--------|
+| `callbacks.OnStart` (ChatModel) | Before `runPrompt` | Before `runPrompt` |
+| `callbacks.OnStart` (Tool) | Real-time per tool | Real-time per tool |
+| `callbacks.OnEnd` (Tool) | Real-time per tool | Real-time per tool |
+| `callbacks.OnEnd` (ChatModel) | After `finalMessage()` | **Not called directly** — uses `OnEndWithStreamOutput` instead |
+| `callbacks.OnEndWithStreamOutput` | Not used | Wraps the `StreamReader` so handlers observe each chunk |
+
+### Stream chunk types
+
+The stream emits these message shapes:
+
+1. **Text chunk**: `Message{Role: Assistant, Content: "partial text..."}`
+2. **Tool call start**: `Message{Role: Assistant, ToolCalls: [{ID: "A", Function: {Name: "read", Arguments: "{...}"}, Extra: {acp_stream_event: "tool_call"}}]}`
+3. **Tool call update**: `Message{Role: Assistant, ToolCalls: [{ID: "A", ..., Extra: {acp_stream_event: "tool_call_update"}}]}`
+
+The `acp_stream_event` extra field distinguishes start from update in the stream. This field is intentionally absent from the final aggregated message in Generate mode.
+
 ## Known Gaps
 
 ### Critical
