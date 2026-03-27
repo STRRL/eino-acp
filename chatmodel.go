@@ -97,84 +97,16 @@ func (cm *ChatModel) WithTools(_ []*schema.ToolInfo) (model.ToolCallingChatModel
 	return cm, nil
 }
 
-// Generate runs the ACP agent and returns the full assistant message.
-func (cm *ChatModel) Generate(ctx context.Context, input []*schema.Message, _ ...model.Option) (outMsg *schema.Message, err error) {
-	ctx = callbacks.EnsureRunInfo(ctx, cm.GetType(), components.ComponentOfChatModel)
-	ctx = callbacks.OnStart(ctx, cm.getCallbackInput(input))
-	defer func() {
-		if err != nil {
-			callbacks.OnError(ctx, err)
-		}
-	}()
-
-	var mu sync.Mutex
-	collector := newResponseCollector()
-
-	// Track per-tool callback contexts for firing OnStart/OnEnd
-	toolCtxMap := make(map[string]context.Context)
-
-	onUpdate := func(u acp.SessionUpdate) {
-		mu.Lock()
-		defer mu.Unlock()
-
-		// Fire tool OnStart callback when a new tool call arrives
-		if u.ToolCall != nil {
-			toolID := string(u.ToolCall.ToolCallId)
-			toolName := string(u.ToolCall.Kind)
-			if toolName == "" {
-				toolName = u.ToolCall.Title
-			}
-			toolCtx := callbacks.ReuseHandlers(ctx, &callbacks.RunInfo{
-				Name:      toolName,
-				Type:      "Tool/ACP",
-				Component: components.ComponentOfTool,
-			})
-			toolCtx = callbacks.OnStart(toolCtx, &tool.CallbackInput{
-				ArgumentsInJSON: marshalACPValue(u.ToolCall.RawInput, "{}"),
-				Extra: map[string]any{
-					"acp_title":        u.ToolCall.Title,
-					"acp_kind":         string(u.ToolCall.Kind),
-					"acp_tool_call_id": toolID,
-				},
-			})
-			toolCtxMap[toolID] = toolCtx
-		}
-
-		// Fire tool OnEnd callback when a tool call completes or fails
-		if u.ToolCallUpdate != nil {
-			toolID := string(u.ToolCallUpdate.ToolCallId)
-			if tCtx, ok := toolCtxMap[toolID]; ok {
-				status := acp.ToolCallStatusCompleted
-				if u.ToolCallUpdate.Status != nil {
-					status = *u.ToolCallUpdate.Status
-				}
-				switch status {
-				case acp.ToolCallStatusCompleted:
-					callbacks.OnEnd(tCtx, &tool.CallbackOutput{
-						Response: marshalACPValue(u.ToolCallUpdate.RawOutput, ""),
-						Extra: map[string]any{
-							"acp_tool_call_id": toolID,
-						},
-					})
-					delete(toolCtxMap, toolID)
-				case acp.ToolCallStatusFailed:
-					callbacks.OnError(tCtx, fmt.Errorf("tool %s failed", toolID))
-					delete(toolCtxMap, toolID)
-				}
-			}
-		}
-
-		collector.handleUpdate(u)
-	}
-
-	if err = cm.runPrompt(ctx, input, onUpdate); err != nil {
-		return nil, err
-	}
-
-	outMsg = collector.finalMessage()
-
-	callbacks.OnEnd(ctx, cm.getCallbackOutput(outMsg))
-	return outMsg, nil
+// Generate is not supported for ACP-based chat models.
+//
+// ACP is a streaming-only protocol: the agent emits ordered session updates
+// (tool_call → tool_call_update → agent_message_chunk) that must be consumed
+// in real time. Collapsing them into a single *schema.Message via Generate
+// destroys event ordering and streaming granularity.
+//
+// Use Stream instead.
+func (cm *ChatModel) Generate(_ context.Context, _ []*schema.Message, _ ...model.Option) (*schema.Message, error) {
+	return nil, fmt.Errorf("einoacp: Generate is not supported — ACP is a streaming-only protocol; use Stream instead")
 }
 
 // Stream runs the ACP agent and yields assistant output chunks as they arrive.
