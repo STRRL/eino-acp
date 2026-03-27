@@ -30,7 +30,7 @@ PromptResponse(StopReason)    →         Generate: return aggregated *schema.Me
 |-----|-----------|------|------------|
 | `PromptRequest.Prompt []ContentBlock` | Input | `[]*schema.Message` | **Lossy aggregation**: all messages concatenated into a single `TextBlock` with role prefixes (`[System]`, `[Assistant]`, `[Tool Result]`). Multi-turn conversation structure is flattened. |
 | `SessionUpdate.AgentMessageChunk.Content.Text.Text` | Output | `schema.Message{Role: Assistant, Content: text}` | **Direct**: text chunks accumulated, concatenated in `finalMessage()` |
-| `SessionUpdate.AgentThoughtChunk` | Output | *(not mapped)* | **Dropped**: reasoning/thinking content is silently discarded |
+| `SessionUpdate.AgentThoughtChunk` | Output | `schema.Message{ReasoningContent: text}` | **Direct**: thought chunks accumulated into `ReasoningContent`. In stream mode each chunk is emitted with `ReasoningContent` set and `Content` empty. |
 | `SessionUpdate.UserMessageChunk` | Output | *(not mapped)* | **Dropped**: echoed user messages are discarded |
 | `SessionUpdate.Plan` | Output | *(not mapped)* | **Dropped**: agent execution plans are discarded |
 
@@ -201,7 +201,7 @@ The `acp_stream_event` extra field distinguishes start from update in the stream
 
 ### Data Loss
 - **Input message structure**: Multi-turn conversations flattened to single text block. Tool results lose their `ToolCallID` associations.
-- **Agent thought/reasoning**: `AgentThoughtChunk` discarded; could map to `Message.ReasoningContent`.
+- **Agent thought/reasoning**: ✅ Mapped — `AgentThoughtChunk` text accumulated into `Message.ReasoningContent`.
 - **Agent plan**: `SessionUpdatePlan` discarded; no eino equivalent but could be useful metadata.
 - **Stop reason**: `PromptResponse.StopReason` not mapped to `ResponseMeta.FinishReason`.
 - **Token usage**: ACP doesn't expose this; eino callbacks always report nil usage.

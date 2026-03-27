@@ -18,8 +18,9 @@ const (
 )
 
 type responseCollector struct {
-	textParts []string
-	toolCalls *toolCallTracker
+	textParts     []string
+	thoughtParts  []string
+	toolCalls     *toolCallTracker
 }
 
 func newResponseCollector() *responseCollector {
@@ -37,6 +38,15 @@ func (c *responseCollector) handleUpdate(u acp.SessionUpdate) (textChunk *schema
 		}
 	}
 
+	if thought := assistantThoughtFromUpdate(u); thought != "" {
+		c.thoughtParts = append(c.thoughtParts, thought)
+		// Emit thought as a stream chunk with ReasoningContent set, Content empty.
+		textChunk = &schema.Message{
+			Role:             schema.Assistant,
+			ReasoningContent: thought,
+		}
+	}
+
 	if tc, ok := c.toolCalls.applyUpdate(u); ok {
 		toolChunk = &schema.Message{
 			Role:      schema.Assistant,
@@ -49,9 +59,10 @@ func (c *responseCollector) handleUpdate(u acp.SessionUpdate) (textChunk *schema
 
 func (c *responseCollector) finalMessage() *schema.Message {
 	return &schema.Message{
-		Role:      schema.Assistant,
-		Content:   strings.Join(c.textParts, ""),
-		ToolCalls: c.toolCalls.buildFinal(),
+		Role:             schema.Assistant,
+		Content:          strings.Join(c.textParts, ""),
+		ReasoningContent: strings.Join(c.thoughtParts, ""),
+		ToolCalls:        c.toolCalls.buildFinal(),
 	}
 }
 
@@ -61,6 +72,14 @@ func assistantTextFromUpdate(u acp.SessionUpdate) string {
 	}
 
 	return u.AgentMessageChunk.Content.Text.Text
+}
+
+func assistantThoughtFromUpdate(u acp.SessionUpdate) string {
+	if u.AgentThoughtChunk == nil || u.AgentThoughtChunk.Content.Text == nil {
+		return ""
+	}
+
+	return u.AgentThoughtChunk.Content.Text.Text
 }
 
 type toolCallTracker struct {
