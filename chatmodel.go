@@ -293,13 +293,6 @@ func (cm *ChatModel) getCallbackInput(input []*schema.Message) *model.CallbackIn
 	}
 }
 
-func (cm *ChatModel) getCallbackOutput(msg *schema.Message) *model.CallbackOutput {
-	return &model.CallbackOutput{
-		Message: msg,
-		Config:  &model.Config{},
-	}
-}
-
 func messagesToContentBlocks(messages []*schema.Message) []acp.ContentBlock {
 	var parts []string
 	for _, msg := range messages {
