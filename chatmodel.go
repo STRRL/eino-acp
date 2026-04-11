@@ -38,16 +38,23 @@ type Config struct {
 	// AutoApprove automatically approves all permission requests from the agent.
 	// When false, permission requests are denied.
 	AutoApprove bool
+
+	// OnSessionUpdate is called for every ACP SessionUpdate received during
+	// execution. This fires in real-time regardless of whether Generate() or
+	// Stream() is used, giving consumers access to tool calls, text chunks,
+	// and other ACP events as they happen.
+	OnSessionUpdate func(acp.SessionUpdate)
 }
 
 // ChatModel implements eino's model.ChatModel by communicating with
 // any ACP-compatible coding agent (Claude Code, Codex CLI, etc.)
 // over the Agent Client Protocol.
 type ChatModel struct {
-	command     []string
-	cwd         string
-	env         []string
-	autoApprove bool
+	command         []string
+	cwd             string
+	env             []string
+	autoApprove     bool
+	onSessionUpdate func(acp.SessionUpdate)
 }
 
 // NewChatModel creates a new ACP chat model.
@@ -70,10 +77,11 @@ func NewChatModel(_ context.Context, config *Config) (*ChatModel, error) {
 	}
 
 	return &ChatModel{
-		command:     config.Command,
-		cwd:         cwd,
-		env:         config.Env,
-		autoApprove: config.AutoApprove,
+		command:         config.Command,
+		cwd:             cwd,
+		env:             config.Env,
+		autoApprove:     config.AutoApprove,
+		onSessionUpdate: config.OnSessionUpdate,
 	}, nil
 }
 
@@ -207,6 +215,15 @@ func (cm *ChatModel) Stream(ctx context.Context, input []*schema.Message, _ ...m
 // runPrompt launches the agent subprocess, runs the ACP protocol flow,
 // and calls onUpdate for each session update received.
 func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onUpdate func(acp.SessionUpdate)) error {
+	// Wrap onUpdate to also fire the user-provided OnSessionUpdate callback
+	if cm.onSessionUpdate != nil {
+		inner := onUpdate
+		onUpdate = func(u acp.SessionUpdate) {
+			cm.onSessionUpdate(u)
+			inner(u)
+		}
+	}
+
 	cmd := exec.CommandContext(ctx, cm.command[0], cm.command[1:]...)
 	cmd.Env = cm.buildEnv()
 	cmd.Stderr = os.Stderr
