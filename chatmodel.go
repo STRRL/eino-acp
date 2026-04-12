@@ -44,6 +44,10 @@ type Config struct {
 	// Stream() is used, giving consumers access to tool calls, text chunks,
 	// and other ACP events as they happen.
 	OnSessionUpdate func(acp.SessionUpdate)
+
+	// McpServers is the list of MCP servers to attach to each ACP session.
+	// Claude Code will discover and use tools from these servers.
+	McpServers []acp.McpServer
 }
 
 // ChatModel implements eino's model.ChatModel by communicating with
@@ -55,6 +59,7 @@ type ChatModel struct {
 	env             []string
 	autoApprove     bool
 	onSessionUpdate func(acp.SessionUpdate)
+	mcpServers      []acp.McpServer
 }
 
 // NewChatModel creates a new ACP chat model.
@@ -82,6 +87,7 @@ func NewChatModel(_ context.Context, config *Config) (*ChatModel, error) {
 		env:             config.Env,
 		autoApprove:     config.AutoApprove,
 		onSessionUpdate: config.OnSessionUpdate,
+		mcpServers:      config.McpServers,
 	}, nil
 }
 
@@ -272,7 +278,7 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 
 	sess, err := conn.NewSession(ctx, acp.NewSessionRequest{
 		Cwd:        cm.cwd,
-		McpServers: []acp.McpServer{},
+		McpServers: cm.mcpServers,
 	})
 	if err != nil {
 		return fmt.Errorf("ACP new session: %w", err)
