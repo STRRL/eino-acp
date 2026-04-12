@@ -1,0 +1,25 @@
+example/main.go
+  e66fecf4a80f350e 4,8,17,25-27,29,32-35,37,39
+chatmodel.go
+  e66fecf4a80f350e 23-30,49,57-58,61-62,75,176,191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.9",
+  "base_commit_sha": "4323ed27b41a2a22c4b21c5fb444c20049757398",
+  "prompts": {
+    "e66fecf4a80f350e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bafb5aed-37ce-423a-8fb6-26032b67ad5d",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 30,
+      "total_deletions": 35,
+      "accepted_lines": 29,
+      "overriden_lines": 0
+    }
+  }
+}
