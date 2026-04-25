@@ -276,9 +276,13 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 		return fmt.Errorf("ACP initialize: %w", err)
 	}
 
+	mcpServers := cm.mcpServers
+	if mcpServers == nil {
+		mcpServers = []acp.McpServer{}
+	}
 	sess, err := conn.NewSession(ctx, acp.NewSessionRequest{
 		Cwd:        cm.cwd,
-		McpServers: cm.mcpServers,
+		McpServers: mcpServers,
 	})
 	if err != nil {
 		return fmt.Errorf("ACP new session: %w", err)
