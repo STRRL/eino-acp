@@ -1,0 +1,29 @@
+chatmodel.go
+  1c64a4d493cff4fa 25
+command.go
+  1c64a4d493cff4fa 1-27
+README.md
+  1c64a4d493cff4fa 29-31,66
+example/main.go
+  1c64a4d493cff4fa 17
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.9",
+  "base_commit_sha": "ad3eda96819ded61cf4e5b70d6beabe8dd30fa22",
+  "prompts": {
+    "1c64a4d493cff4fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8f715bdb-e530-440c-945a-33a9195febf0",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 33,
+      "total_deletions": 12,
+      "accepted_lines": 33,
+      "overriden_lines": 0
+    }
+  }
+}
