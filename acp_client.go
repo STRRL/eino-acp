@@ -13,8 +13,9 @@ import (
 
 // acpClient implements acp.Client to handle callbacks from the agent.
 type acpClient struct {
-	onUpdate    func(acp.SessionUpdate)
-	autoApprove bool
+	onUpdate     func(acp.SessionUpdate)
+	autoApprove  bool
+	onPermission func(context.Context, acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error)
 }
 
 var _ acp.Client = (*acpClient)(nil)
@@ -26,7 +27,10 @@ func (c *acpClient) SessionUpdate(_ context.Context, n acp.SessionNotification) 
 	return nil
 }
 
-func (c *acpClient) RequestPermission(_ context.Context, p acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+func (c *acpClient) RequestPermission(ctx context.Context, p acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	if c.onPermission != nil {
+		return c.onPermission(ctx, p)
+	}
 	if c.autoApprove && len(p.Options) > 0 {
 		return acp.RequestPermissionResponse{
 			Outcome: acp.RequestPermissionOutcome{

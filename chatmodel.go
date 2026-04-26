@@ -39,6 +39,10 @@ type Config struct {
 	// When false, permission requests are denied.
 	AutoApprove bool
 
+	// OnPermission is called for every ACP permission request. When set, it
+	// takes precedence over AutoApprove.
+	OnPermission func(context.Context, acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error)
+
 	// OnSessionUpdate is called for every ACP SessionUpdate received during
 	// execution. This fires in real-time regardless of whether Generate() or
 	// Stream() is used, giving consumers access to tool calls, text chunks,
@@ -58,6 +62,7 @@ type ChatModel struct {
 	cwd             string
 	env             []string
 	autoApprove     bool
+	onPermission    func(context.Context, acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error)
 	onSessionUpdate func(acp.SessionUpdate)
 	mcpServers      []acp.McpServer
 }
@@ -86,6 +91,7 @@ func NewChatModel(_ context.Context, config *Config) (*ChatModel, error) {
 		cwd:             cwd,
 		env:             config.Env,
 		autoApprove:     config.AutoApprove,
+		onPermission:    config.OnPermission,
 		onSessionUpdate: config.OnSessionUpdate,
 		mcpServers:      config.McpServers,
 	}, nil
@@ -256,8 +262,9 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 	}()
 
 	client := &acpClient{
-		onUpdate:    onUpdate,
-		autoApprove: cm.autoApprove,
+		onUpdate:     onUpdate,
+		autoApprove:  cm.autoApprove,
+		onPermission: cm.onPermission,
 	}
 
 	conn := acp.NewClientSideConnection(client, stdin, stdout)
