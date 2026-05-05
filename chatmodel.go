@@ -326,18 +326,16 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 		return fmt.Errorf("ACP new session: %w", err)
 	}
 
-	// Surface the agent's reported model state (currentModelId +
-	// availableModels) before any model switch happens. Callers use
-	// this to populate UI / discover models dynamically — see
-	// Config.OnSessionInfo doc for the rationale.
-	if cm.onSessionInfo != nil {
-		cm.onSessionInfo(sess.SessionId, sess.Models)
-	}
-
-	// Switch to the caller-requested model, if any. SetSessionModel
-	// is the protocol-native way to pick a model for a session;
-	// `--model <id>` on the spawn command line is silently ignored
-	// by Claude Code in --acp mode.
+	// Switch to the caller-requested model BEFORE firing
+	// OnSessionInfo. SetSessionModel is the protocol-native way to
+	// pick a model for a session; `--model <id>` on the spawn command
+	// line is silently ignored by Claude Code in --acp mode.
+	//
+	// We mutate sess.Models.CurrentModelId after a successful switch
+	// so the OnSessionInfo callback sees the post-switch state. The
+	// ACP protocol does not echo a fresh SessionModelState back from
+	// SetSessionModel (the response is empty); we trust the protocol —
+	// if no error, the requested model is now in effect.
 	if cm.selectModel != "" {
 		if _, err := conn.SetSessionModel(ctx, acp.SetSessionModelRequest{
 			SessionId: sess.SessionId,
@@ -345,6 +343,18 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 		}); err != nil {
 			return fmt.Errorf("ACP set session model %q: %w", cm.selectModel, err)
 		}
+		if sess.Models != nil {
+			sess.Models.CurrentModelId = acp.ModelId(cm.selectModel)
+		}
+	}
+
+	// Now surface the (possibly post-switch) model state to the
+	// caller — currentModelId + availableModels. Callers use this
+	// to populate UI / discover models dynamically and to verify
+	// that what they asked for is what got applied. See
+	// Config.OnSessionInfo doc for the rationale.
+	if cm.onSessionInfo != nil {
+		cm.onSessionInfo(sess.SessionId, sess.Models)
 	}
 
 	prompt := messagesToContentBlocks(input)
