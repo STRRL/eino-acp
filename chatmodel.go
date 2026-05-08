@@ -267,9 +267,7 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, cm.command[0], cm.command[1:]...)
-	cmd.Env = cm.buildEnv()
-	cmd.Stderr = os.Stderr
+	cmd := cm.commandContext(ctx)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -368,6 +366,14 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 	}
 
 	return nil
+}
+
+func (cm *ChatModel) commandContext(ctx context.Context) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, cm.command[0], cm.command[1:]...)
+	cmd.Dir = cm.cwd
+	cmd.Env = cm.buildEnv()
+	cmd.Stderr = os.Stderr
+	return cmd
 }
 
 func (cm *ChatModel) buildEnv() []string {
