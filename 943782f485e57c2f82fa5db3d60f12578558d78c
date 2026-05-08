@@ -1,0 +1,39 @@
+command.go
+  6446777c07dca1a9 6,8-10
+  ba01230366ab0eff 23,25,29-34,36-38
+README.md
+  6446777c07dca1a9 66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "943782f485e57c2f82fa5db3d60f12578558d78c",
+  "prompts": {
+    "6446777c07dca1a9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e1e045e5-5333-4cf2-972d-ccd3c6d1a9dd",
+        "model": "composer-2-fast"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 5,
+      "total_deletions": 2,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    },
+    "ba01230366ab0eff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3879652b-0dc9-435f-a005-475d2854c635",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 95,
+      "total_deletions": 70,
+      "accepted_lines": 11,
+      "overriden_lines": 0
+    }
+  }
+}

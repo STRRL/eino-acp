@@ -1,0 +1,23 @@
+chatmodel.go
+  bc2df54a31182d91 47-50,62,90,281
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "4c282fba17f862d21cbb7c54ba8d312086531682",
+  "prompts": {
+    "bc2df54a31182d91": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1fb0332b-df5d-464e-a19d-fd8a119d8ab1",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU",
+      "messages": [],
+      "total_additions": 7,
+      "total_deletions": 1,
+      "accepted_lines": 7,
+      "overriden_lines": 0
+    }
+  }
+}

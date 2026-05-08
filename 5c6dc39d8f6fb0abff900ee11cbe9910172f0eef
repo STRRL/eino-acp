@@ -1,0 +1,23 @@
+.github/workflows/ci.yml
+  bb0f392b2c7951e0 26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.9",
+  "base_commit_sha": "5c6dc39d8f6fb0abff900ee11cbe9910172f0eef",
+  "prompts": {
+    "bb0f392b2c7951e0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "67276708-1447-411c-8beb-57c0e6fcdf48",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
