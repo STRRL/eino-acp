@@ -49,6 +49,33 @@ type Config struct {
 	// and other ACP events as they happen.
 	OnSessionUpdate func(acp.SessionUpdate)
 
+	// SelectModel is the ACP model id to switch to via SetSessionModel
+	// after each NewSession (the protocol-native way to pick a model
+	// for a session). Empty = use the agent's default. Pass --model
+	// on the spawn command line is unreliable: Claude Code ignores it
+	// in --acp mode and currentModelId stays "default" regardless;
+	// SetSessionModel is the only way to actually switch.
+	//
+	// Per-CLI valid ids:
+	//   Claude Code: "default" / "sonnet" / "haiku"
+	//   GitHub Copilot: "auto" / "gpt-5.4" / "gpt-5.3-codex" / ...
+	// Discoverable via the OnSessionInfo callback below.
+	SelectModel string
+
+	// OnSessionInfo fires once per NewSession with the model + session
+	// id information the agent reports back. The SessionModelState
+	// contains the *resolved* currentModelId (e.g. after applying
+	// SelectModel, or whatever the agent's default was) and the full
+	// list of availableModels with human-readable names + descriptions.
+	//
+	// Use this to (a) surface the actual running model to a UI rather
+	// than the alias the user picked, and (b) populate a model picker
+	// dynamically without hardcoding a per-CLI list.
+	//
+	// Called BEFORE the first prompt is sent on the new session, so
+	// callers can react to the model state synchronously if needed.
+	OnSessionInfo func(sessionId acp.SessionId, models *acp.SessionModelState)
+
 	// McpServers is the list of MCP servers to attach to each ACP session.
 	// Claude Code will discover and use tools from these servers.
 	McpServers []acp.McpServer
@@ -64,6 +91,8 @@ type ChatModel struct {
 	autoApprove     bool
 	onPermission    func(context.Context, acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error)
 	onSessionUpdate func(acp.SessionUpdate)
+	selectModel     string
+	onSessionInfo   func(acp.SessionId, *acp.SessionModelState)
 	mcpServers      []acp.McpServer
 }
 
@@ -93,6 +122,8 @@ func NewChatModel(_ context.Context, config *Config) (*ChatModel, error) {
 		autoApprove:     config.AutoApprove,
 		onPermission:    config.OnPermission,
 		onSessionUpdate: config.OnSessionUpdate,
+		selectModel:     config.SelectModel,
+		onSessionInfo:   config.OnSessionInfo,
 		mcpServers:      config.McpServers,
 	}, nil
 }
@@ -293,6 +324,37 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 	})
 	if err != nil {
 		return fmt.Errorf("ACP new session: %w", err)
+	}
+
+	// Switch to the caller-requested model BEFORE firing
+	// OnSessionInfo. SetSessionModel is the protocol-native way to
+	// pick a model for a session; `--model <id>` on the spawn command
+	// line is silently ignored by Claude Code in --acp mode.
+	//
+	// We mutate sess.Models.CurrentModelId after a successful switch
+	// so the OnSessionInfo callback sees the post-switch state. The
+	// ACP protocol does not echo a fresh SessionModelState back from
+	// SetSessionModel (the response is empty); we trust the protocol —
+	// if no error, the requested model is now in effect.
+	if cm.selectModel != "" {
+		if _, err := conn.SetSessionModel(ctx, acp.SetSessionModelRequest{
+			SessionId: sess.SessionId,
+			ModelId:   acp.ModelId(cm.selectModel),
+		}); err != nil {
+			return fmt.Errorf("ACP set session model %q: %w", cm.selectModel, err)
+		}
+		if sess.Models != nil {
+			sess.Models.CurrentModelId = acp.ModelId(cm.selectModel)
+		}
+	}
+
+	// Now surface the (possibly post-switch) model state to the
+	// caller — currentModelId + availableModels. Callers use this
+	// to populate UI / discover models dynamically and to verify
+	// that what they asked for is what got applied. See
+	// Config.OnSessionInfo doc for the rationale.
+	if cm.onSessionInfo != nil {
+		cm.onSessionInfo(sess.SessionId, sess.Models)
 	}
 
 	prompt := messagesToContentBlocks(input)
