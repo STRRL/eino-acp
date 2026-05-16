@@ -1,0 +1,23 @@
+docs/MAPPING.md
+  260f9b841d3f52ce 129-188
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "118345581c7cb589c234432bf86c5e064f99f78b",
+  "prompts": {
+    "260f9b841d3f52ce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5e181c78-fece-456e-8c06-de5c6f0c1a83",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 60,
+      "total_deletions": 0,
+      "accepted_lines": 60,
+      "overriden_lines": 0
+    }
+  }
+}

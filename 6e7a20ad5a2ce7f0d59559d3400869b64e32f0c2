@@ -1,0 +1,25 @@
+command.go
+  6446777c07dca1a9 6,8-10
+README.md
+  6446777c07dca1a9 66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.15",
+  "base_commit_sha": "6e7a20ad5a2ce7f0d59559d3400869b64e32f0c2",
+  "prompts": {
+    "6446777c07dca1a9": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "e1e045e5-5333-4cf2-972d-ccd3c6d1a9dd",
+        "model": "composer-2-fast"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 5,
+      "total_deletions": 2,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    }
+  }
+}

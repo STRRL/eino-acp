@@ -1,0 +1,27 @@
+.golangci.yml
+  1c64a4d493cff4fa 1-15
+.github/workflows/ci.yml
+  1c64a4d493cff4fa 1-52
+prek.toml
+  1c64a4d493cff4fa 1-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.9",
+  "base_commit_sha": "e9597846191652b54c163d84727a19d5a0fd5c0a",
+  "prompts": {
+    "1c64a4d493cff4fa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8f715bdb-e530-440c-945a-33a9195febf0",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Zhiqiang ZHOU <im@strrl.dev>",
+      "messages": [],
+      "total_additions": 93,
+      "total_deletions": 2,
+      "accepted_lines": 91,
+      "overriden_lines": 0
+    }
+  }
+}
