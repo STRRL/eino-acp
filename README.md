@@ -28,6 +28,7 @@ func main() {
 	cm, err := einoacp.NewChatModel(ctx, &einoacp.Config{
 		Command: einoacp.ClaudeCommand(),
 		// or: einoacp.CodexCommand()
+		// or: einoacp.CopilotCommand()
 		// or: einoacp.GeminiCommand()
 	})
 	if err != nil {
@@ -63,7 +64,7 @@ func main() {
 
 | Field | Description |
 |-------|-------------|
-| `Command` | Command to launch the ACP agent. Use `ClaudeCommand()`, `CodexCommand()`, or `GeminiCommand()` helpers, which auto-detect `bunx`, then `pnpm dlx`, then `npx -y`. **Required.** |
+| `Command` | Command to launch the ACP agent. Use `ClaudeCommand()`, `CodexCommand()`, `CopilotCommand()`, or `GeminiCommand()` helpers, which auto-detect `bunx`, then `pnpm dlx`, then `npx -y`. **Required.** |
 | `Cwd` | Working directory for the agent session. Defaults to current directory. |
 | `Env` | Additional environment variables for the agent subprocess. |
 | `AutoApprove` | Auto-approve all permission requests from the agent. Default `false`. |

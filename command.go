@@ -25,6 +25,11 @@ func CodexCommand() []string {
 	return append(dlxPrefix(), "@zed-industries/codex-acp@latest")
 }
 
+// CopilotCommand returns the command to launch GitHub Copilot via ACP.
+func CopilotCommand() []string {
+	return append(dlxPrefix(), "@github/copilot", "--acp")
+}
+
 // GeminiCommand returns the command to launch Google Gemini CLI via ACP.
 //
 // NOTE: Gemini CLI in ACP mode currently does not work with OAuth authentication
