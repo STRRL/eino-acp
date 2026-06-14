@@ -4,7 +4,7 @@ go 1.25.7
 
 require (
 	github.com/cloudwego/eino v0.8.0
-	github.com/coder/acp-go-sdk v0.6.3
+	github.com/coder/acp-go-sdk v0.13.5
 )
 
 require (

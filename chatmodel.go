@@ -49,24 +49,29 @@ type Config struct {
 	// and other ACP events as they happen.
 	OnSessionUpdate func(acp.SessionUpdate)
 
-	// SelectModel is the ACP model id to switch to via SetSessionModel
-	// after each NewSession (the protocol-native way to pick a model
-	// for a session). Empty = use the agent's default. Pass --model
-	// on the spawn command line is unreliable: Claude Code ignores it
-	// in --acp mode and currentModelId stays "default" regardless;
-	// SetSessionModel is the only way to actually switch.
+	// SelectModel is the ACP model id to switch to after each NewSession.
+	// Empty = use the agent's default. Passing --model on the spawn
+	// command line is unreliable: Claude Code ignores it in --acp mode and
+	// the session stays on its default regardless.
+	//
+	// Model selection is done via the session config option mechanism:
+	// the agent advertises a category="model" select option at session
+	// creation and we switch by calling session/set_config_option. (The
+	// old, unstable session/set_model RPC was removed from the protocol.)
 	//
 	// Per-CLI valid ids:
 	//   Claude Code: "default" / "sonnet" / "haiku"
 	//   GitHub Copilot: "auto" / "gpt-5.4" / "gpt-5.3-codex" / ...
-	// Discoverable via the OnSessionInfo callback below.
+	// Discoverable via the OnSessionInfo callback below. When SelectModel
+	// is non-empty but not advertised by the agent, NewSession fails fast.
 	SelectModel string
 
-	// OnSessionInfo fires once per NewSession with the model + session
-	// id information the agent reports back. The SessionModelState
-	// contains the *resolved* currentModelId (e.g. after applying
-	// SelectModel, or whatever the agent's default was) and the full
-	// list of availableModels with human-readable names + descriptions.
+	// OnSessionInfo fires once per NewSession with the model + session id
+	// information extracted from the agent's "model" config option. The
+	// ModelConfig carries the *resolved* CurrentModelID (after applying
+	// SelectModel, or the agent's default) and the full list of available
+	// models with human-readable names + descriptions. nil when the agent
+	// advertises no model selector.
 	//
 	// Use this to (a) surface the actual running model to a UI rather
 	// than the alias the user picked, and (b) populate a model picker
@@ -74,7 +79,7 @@ type Config struct {
 	//
 	// Called BEFORE the first prompt is sent on the new session, so
 	// callers can react to the model state synchronously if needed.
-	OnSessionInfo func(sessionId acp.SessionId, models *acp.SessionModelState)
+	OnSessionInfo func(sessionId acp.SessionId, models *ModelConfig)
 
 	// McpServers is the list of MCP servers to attach to each ACP session.
 	// Claude Code will discover and use tools from these servers.
@@ -92,7 +97,7 @@ type ChatModel struct {
 	onPermission    func(context.Context, acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error)
 	onSessionUpdate func(acp.SessionUpdate)
 	selectModel     string
-	onSessionInfo   func(acp.SessionId, *acp.SessionModelState)
+	onSessionInfo   func(acp.SessionId, *ModelConfig)
 	mcpServers      []acp.McpServer
 }
 
@@ -301,7 +306,7 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 	_, err = conn.Initialize(ctx, acp.InitializeRequest{
 		ProtocolVersion: acp.ProtocolVersionNumber,
 		ClientCapabilities: acp.ClientCapabilities{
-			Fs: acp.FileSystemCapability{
+			Fs: acp.FileSystemCapabilities{
 				ReadTextFile:  true,
 				WriteTextFile: true,
 			},
@@ -324,35 +329,44 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 		return fmt.Errorf("ACP new session: %w", err)
 	}
 
-	// Switch to the caller-requested model BEFORE firing
-	// OnSessionInfo. SetSessionModel is the protocol-native way to
-	// pick a model for a session; `--model <id>` on the spawn command
-	// line is silently ignored by Claude Code in --acp mode.
-	//
-	// We mutate sess.Models.CurrentModelId after a successful switch
-	// so the OnSessionInfo callback sees the post-switch state. The
-	// ACP protocol does not echo a fresh SessionModelState back from
-	// SetSessionModel (the response is empty); we trust the protocol —
-	// if no error, the requested model is now in effect.
+	// The agent advertises its selectable models as a category="model"
+	// session config option in the NewSession response. Model selection
+	// is done by switching that option via session/set_config_option;
+	// `--model <id>` on the spawn command line is silently ignored by
+	// Claude Code in --acp mode, and the old session/set_model RPC was
+	// removed from the protocol.
+	modelCfg := ExtractModelConfig(sess.ConfigOptions)
+
+	// Switch to the caller-requested model BEFORE firing OnSessionInfo so
+	// the callback sees the post-switch state. The set_config_option
+	// response is empty; we trust the protocol — if no error, the
+	// requested model is now in effect.
 	if cm.selectModel != "" {
-		if _, err := conn.SetSessionModel(ctx, acp.SetSessionModelRequest{
-			SessionId: sess.SessionId,
-			ModelId:   acp.ModelId(cm.selectModel),
+		if modelCfg == nil {
+			return fmt.Errorf("ACP set session model %q: agent advertises no model selector", cm.selectModel)
+		}
+		valueID, ok := modelCfg.ResolveValue(cm.selectModel)
+		if !ok {
+			return fmt.Errorf("ACP set session model %q: not among the agent's advertised models", cm.selectModel)
+		}
+		if _, err := conn.SetSessionConfigOption(ctx, acp.SetSessionConfigOptionRequest{
+			ValueId: &acp.SetSessionConfigOptionValueId{
+				SessionId: sess.SessionId,
+				ConfigId:  acp.SessionConfigId(modelCfg.ConfigID),
+				Value:     acp.SessionConfigValueId(valueID),
+			},
 		}); err != nil {
 			return fmt.Errorf("ACP set session model %q: %w", cm.selectModel, err)
 		}
-		if sess.Models != nil {
-			sess.Models.CurrentModelId = acp.ModelId(cm.selectModel)
-		}
+		modelCfg.CurrentModelID = valueID
 	}
 
 	// Now surface the (possibly post-switch) model state to the
-	// caller — currentModelId + availableModels. Callers use this
-	// to populate UI / discover models dynamically and to verify
-	// that what they asked for is what got applied. See
-	// Config.OnSessionInfo doc for the rationale.
+	// caller — CurrentModelID + Available. Callers use this to populate
+	// UI / discover models dynamically and to verify that what they asked
+	// for is what got applied. See Config.OnSessionInfo doc for rationale.
 	if cm.onSessionInfo != nil {
-		cm.onSessionInfo(sess.SessionId, sess.Models)
+		cm.onSessionInfo(sess.SessionId, modelCfg)
 	}
 
 	prompt := messagesToContentBlocks(input)

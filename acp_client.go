@@ -88,8 +88,8 @@ func (c *acpClient) CreateTerminal(_ context.Context, _ acp.CreateTerminalReques
 	return acp.CreateTerminalResponse{TerminalId: "t-stub"}, nil
 }
 
-func (c *acpClient) KillTerminalCommand(_ context.Context, _ acp.KillTerminalCommandRequest) (acp.KillTerminalCommandResponse, error) {
-	return acp.KillTerminalCommandResponse{}, nil
+func (c *acpClient) KillTerminal(_ context.Context, _ acp.KillTerminalRequest) (acp.KillTerminalResponse, error) {
+	return acp.KillTerminalResponse{}, nil
 }
 
 func (c *acpClient) TerminalOutput(_ context.Context, _ acp.TerminalOutputRequest) (acp.TerminalOutputResponse, error) {
