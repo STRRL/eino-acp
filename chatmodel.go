@@ -3,6 +3,7 @@ package einoacp
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"runtime/debug"
@@ -341,24 +342,28 @@ func (cm *ChatModel) runPrompt(ctx context.Context, input []*schema.Message, onU
 	// the callback sees the post-switch state. The set_config_option
 	// response is empty; we trust the protocol — if no error, the
 	// requested model is now in effect.
-	if cm.selectModel != "" {
-		if modelCfg == nil {
-			return fmt.Errorf("ACP set session model %q: agent advertises no model selector", cm.selectModel)
+	// Switch only when the agent both advertises a selector AND knows the
+	// requested model. A configured-but-unadvertised model (e.g. a stale
+	// default that predates the real model list loading after login) must
+	// NOT fail the whole run — we keep the agent's current/default model
+	// instead, so the run proceeds on a valid model and the caller's
+	// refreshed list lets the user pick deliberately.
+	if cm.selectModel != "" && modelCfg != nil {
+		if valueID, ok := modelCfg.ResolveValue(cm.selectModel); ok {
+			if _, err := conn.SetSessionConfigOption(ctx, acp.SetSessionConfigOptionRequest{
+				ValueId: &acp.SetSessionConfigOptionValueId{
+					SessionId: sess.SessionId,
+					ConfigId:  acp.SessionConfigId(modelCfg.ConfigID),
+					Value:     acp.SessionConfigValueId(valueID),
+				},
+			}); err != nil {
+				return fmt.Errorf("ACP set session model %q: %w", cm.selectModel, err)
+			}
+			modelCfg.CurrentModelID = valueID
+		} else {
+			slog.Warn("eino-acp: requested model not advertised; keeping agent default",
+				"model", cm.selectModel)
 		}
-		valueID, ok := modelCfg.ResolveValue(cm.selectModel)
-		if !ok {
-			return fmt.Errorf("ACP set session model %q: not among the agent's advertised models", cm.selectModel)
-		}
-		if _, err := conn.SetSessionConfigOption(ctx, acp.SetSessionConfigOptionRequest{
-			ValueId: &acp.SetSessionConfigOptionValueId{
-				SessionId: sess.SessionId,
-				ConfigId:  acp.SessionConfigId(modelCfg.ConfigID),
-				Value:     acp.SessionConfigValueId(valueID),
-			},
-		}); err != nil {
-			return fmt.Errorf("ACP set session model %q: %w", cm.selectModel, err)
-		}
-		modelCfg.CurrentModelID = valueID
 	}
 
 	// Now surface the (possibly post-switch) model state to the
